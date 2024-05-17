@@ -21,55 +21,28 @@
 #    + CategoryInfo          : InvalidData : (:) [Copy-Item], ParameterBindingValidationException
 #    + FullyQualifiedErrorId : ParameterArgumentValidationError,Microsoft.PowerShell.Commands.CopyItemCommand
 
-# Pour ne pas prendre de retard, j'ai copié le contenu de chaque fichier à la main
+# Pour ne pas prendre de retard, j'ai copié le contenu de chaque fichier à la main et j'ai inséré le tout dans des documents créés sur le Client
 # Ce n'est pas très legit, mais il vaut mieux cela que ne pas rendre l'exercice 2
 
+
+
 # Fichier Main.ps1
-# Changement de la destination de l'ArgumentList (remplace C:\Temp par C:\Scripts)
 
-Start-Process -FilePath "powershell.exe" -ArgumentList "C:\Scripts\AddLocalUsers.ps1" -Verb RunAs -WindowStyle Maximized
+Start-Process -FilePath "powershell.exe" -ArgumentList "C:\Scripts\AddLocalUsers.ps1" -Verb RunAs -WindowStyle Maximized # Q.2.1
 
-# Fichier Functions.psm1 - La fonction Log n'existe pas dans le script AddLocalUsers.ps1
-
-function Log
-{
-    param([string]$FilePath,[string]$Content)
-
-    # Vérifie si le fichier existe, sinon le crée
-    If (-not (Test-Path -Path $LogFile))
-    # Modification $FilePath > $LogFile pour chercher si le fichier de Log n'existe pas
-    {
-        New-Item -ItemType File -Path $LogFile | Out-Null
-        # Modification $FilePath > $LogFile pour créer le fichier de Log si il n'existe pas
-    }
-
-    # Construit la ligne de journal
-    $Date = Get-Date -Format "dd/MM/yyyy-HH:mm:ss"
-    $User = [System.Security.Principal.WindowsIdentity]::GetCurrent().Name
-    $logLine = "$Date;$User;$Content"
-
-    # Ajoute la ligne de journal au fichier
-    Add-Content -Path $LogFile -Value $logLine
-    # Modification $FilePath > $LogFile pour ajouter du contenu au fichier de Log
-}
 
 # Fichier AddLocalUsers.ps1
 
 Write-Host "--- Début du script ---"
 
-Function RandomPassword ($length = 6)
-# Modification du nom de la fonction, qui se rapproche trop d'une cmdlet > Random-Password devient RandomPassword
+Function RandomPassword ($length = 12) # Q.2.14 # Modification du nom de Fonction trop proche des Cmdlets
 {
-    $punc = ':,;?@'
-    # Modification pour ajouter des caracères de ponctuation et caractères spéciaux
-    $digits = 0..9
-    # Modification pour prendre en compte les chiffre de 0 à 9
-    $letters = [a..z] + [A..Z]
-    # Modification pour prendre en compte les lettres de A à Z en minuscules et majuscules
+    $punc = 46..46
+    $digits = 48..57
+    $letters = 65..90 + 97..122
 
     $password = get-random -count $length -input ($punc + $digits + $letters) |`
-        ForEach-Object -begin { $aa = $null } -process {$aa += [char]$_} -end {$aa}
-        # Modification de la commande ForEach > ForEach-Object
+        ForEach -begin { $aa = $null } -process {$aa += [char]$_} -end {$aa}
     Return $password.ToString()
 }
 
@@ -82,43 +55,61 @@ Function ManageAccentsAndCapitalLetters
     $StringWithoutAccentAndCapitalLetters
 }
 
+function Log # Q.2.9
+{
+    param([string]$LogFile,[string]$Content)
+
+    # Vérifie si le fichier existe, sinon le crée
+    If (-not (Test-Path -Path $LogFile))
+    {
+        New-Item -ItemType File -Path $LogFile | Out-Null
+    }
+
+    # Construit la ligne de journal
+    $Date = Get-Date -Format "dd/MM/yyyy-HH:mm:ss"
+    $User = [System.Security.Principal.WindowsIdentity]::GetCurrent().Name
+    $logLine = "$Date;$User;$Content"
+
+    # Ajoute la ligne de journal au fichier
+    Add-Content -Path $LogFile -Value $logLine
+}
+
 $Path = "C:\Scripts"
 $CsvFile = "$Path\Users.csv"
 $LogFile = "$Path\Log.log"
 
-$Users = Import-Csv -Path $CsvFile -Delimiter ";" -Header "prenom","nom","societe","fonction","service","description","mail","mobile","scriptPath","telephoneNumber" -Encoding UTF8  | Select-Object -Skip 2
+$Users = Import-Csv -Path $CsvFile -Delimiter ";" -Header "prenom","nom","fonction","description" -Encoding UTF8  | Select-Object # Q.2.5 + Q.2.7
 
 foreach ($User in $Users)
 {
     $Prenom = ManageAccentsAndCapitalLetters -String $User.prenom
-    $Nom = ManageAccentsAndCapitalLetters -String $User.Nom
+    $Nom = ManageAccentsAndCapitalLetters -String $User.nom
     $Name = "$Prenom.$Nom"
     If (-not(Get-LocalUser -Name "$Prenom.$Nom" -ErrorAction SilentlyContinue))
     {
-        $Pass = RandomPassword
-        # Modification du nom de fonction, en lien avec la modification apportée en ligne 57
+        $Pass = RandomPassword # Modification du nom de Fonction trop proche des Cmdlets
         $Password = (ConvertTo-secureString $Pass -AsPlainText -Force)
-        $Description = "$($user.description) - $($User.fonction)"
+        $Description = "$($User.description) - $($User.fonction)"
         $UserInfo = @{
-            Name                 = "$Name"
-            # Modification du contenu qui correspond à la variable $Prenom.$Nom > $Name créé en ligne 92
-            FullName             = "$Prenom.$Nom"
-            Description          = "$Description"
-            # Ajout de la Description dans la création de l'Utilisateur référencée en ligne 98
+            Name                 = "$Name" # Q.2.12
+            FullName             = "$Name" # Q.2.12
+            Description		     = "$Description" # Q.2.6
             Password             = $Password
             AccountNeverExpires  = $true
-            PasswordNeverExpires = $false
+            PasswordNeverExpires = $true # Q.2.13
         }
 
         New-LocalUser @UserInfo
-        Log
-        #Ajout de la fonction Log pour une journalisation
         Add-LocalGroupMember -Group "Utilisateur" -Member "$Prenom.$Nom"
-        Write-Host "L'utilisateur $Prenom.$Nom a été crée"
+        Write-Host "L'utilisateur $Name a été crée avec le mot de passe $Pass" -ForegroundColor Green # Q.2.8 + Q.2.12
+        Log | Write-Host "La journalisation de l'ajout des utilisateurs a été enregistré dans le fichier $LogFile" -ForegroundColor Yellow # Q.2.9
+    }
+    else 
+    {
+        Write-Host "L'utilisateur $Name existe déjà" -ForegroundColor Red # Q.2.10
     }
 }
 
 pause
 Write-Host "--- Fin du script ---"
-Start-Sleep -Seconds 10
-
+pause # Q.2.15
